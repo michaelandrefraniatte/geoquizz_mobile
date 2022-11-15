@@ -1,0 +1,155 @@
+#
+# docker-compose file pour le déploiement initial de l'application lbs
+# Documentation complète : https://bitbucket.org/canals5/docker-things
+#
+# IMPORTANT :
+#   - ajouter les vhosts des services web dans le fichier /etc/vhosts
+#     de la machine hôte :
+#     exemple pour le service api.catalogue :
+#     127.0.0.1   api.catalogue.local
+#   - pour accéder à ce service : https://api.catalogue.local:10443
+#                          ou   :  http://api.catalogue.local:10080
+#
+#
+# accès au service adminer : http://localhost:8080
+# accès au service mysql (bd catalogue) depuis le container api.catalogue :
+#     - utiliser le hostname "db"
+#     - database : catalogue_lbs
+#     - user : catalogue_lbs
+#     - password : catalogue_lbs
+#
+# IMPORTANT : POUR UNE UTILISATION SUR LES MACHINES DU RESEAU IUT :
+#   Décommenter la définition des variables http_proxy et https_proxy
+#
+
+
+
+version: "3"
+
+networks:
+  gq_network:
+    driver: bridge
+
+###################################################################
+# php services: api.mobile.local => localhost (compatibilite ngrok)
+###################################################################
+services:
+  api.mobile:
+    image: canals/php:latest
+    environment:
+      - VHOST_HOSTNAME=localhost
+      - VHOST_DOCROOT=/var/www/api
+      #- http_proxy=http://www-cache.iutnc.univ-lorraine.fr:3128/
+      #- https_proxy=http://www-cache.iutnc.univ-lorraine.fr:3128/
+    ports:
+      - "12081:80"
+      - "12444:443"
+    volumes :
+      - ./mobile/api_mobile:/var/www/api
+      - ./mobile/src:/var/www/src
+      - ./images:/var/www/images:Z
+    working_dir : /var/www/src
+    networks:
+      - gq_network
+    links :
+      - mysql_jeu:db
+
+#############################
+# mysql geoquizz
+#############################
+  mysql_jeu:
+    image: mariadb:latest
+    environment:
+      - MYSQL_ROOT_PASSWORD=quizroot
+      - MYSQL_USER=jeu_gq
+      - MYSQL_PASSWORD=jeu_gq
+      - MYSQL_DATABASE=jeu_gq
+    ports:
+      - "3603:3306"
+    networks:
+      - gq_network
+    volumes :
+      - ./sql:/var/sql
+
+  adminer:
+     image: adminer
+     ports:
+       - "8080:8080"
+     networks:
+       - gq_network
+     links:
+       - mysql_jeu:db_jeu_gq
+
+##############################################
+# A second php service
+##############################################
+
+#  api:
+#      image: canals/php
+#      container_name: api
+##      environment:
+#       - VHOST_HOSTNAME=api.local
+#       - VHOST_DOCROOT=/var/www/api
+#     ports:
+#       - "6080:80"
+#       - "6443:443"
+#     volumes :
+#       - ./api:/var/www/api
+#       - ./src:/var/www/src
+#       - ./html:/var/www/html
+#     links :
+#        - mysql:db
+
+##################################
+# postgres + adminer
+###################################
+# postgres:
+#   image: postgres
+#   container_name: postgres.local
+#   environment :
+#     - POSTGRES_PASSWORD = pgroot
+#     - POSTGRES_USER = pguser
+#   ports:
+#     - "5432:5432"
+
+# adminer-pg:
+#   image: adminer
+#   container_name: adminer_pg.dev.local
+#   ports:
+#     - "8088:8080"
+#   links:
+#     - postgres:db
+#
+
+################################################
+# mongodb & mongo-express
+###############################################
+## mongo:
+#   image: mongo:3.4
+#   container_name: mongo.dev.local
+#   ports:
+#       - 27017:27017
+
+# mongo-express:
+#      image: mongo-express:latest
+#      container_name: mongo_express.dev.local
+#      ports:
+#        - "8081:8081"
+#      links:
+#        - mongo:mongo
+
+##############################################
+# mailcatcher
+##############################################
+## mail:
+#    image: schickling/mailcatcher
+#    container_name: mail.dev.local
+#    ports:
+#      - "1080:1080"
+
+########################################
+# shared storage : useful for, e.g. sharing
+#   uploaded documents (img, others) between multiple services
+########################################
+volumes:
+   data:
